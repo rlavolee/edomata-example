@@ -16,69 +16,69 @@
 
 package dev.hnaderi.example.accounts
 
-import edomata.core.*
-import edomata.syntax.all.*
-import cats.implicits.*
+import edomata.core._
+import edomata.syntax.all._
+import cats.implicits._
 import cats.data.ValidatedNec
 
-enum Event {
-  case Opened
-  case Deposited(amount: BigDecimal)
-  case Withdrawn(amount: BigDecimal)
-  case Closed
+sealed trait Event
+object Event {
+  final case object Opened extends Event
+  final case class Deposited(amount: BigDecimal) extends Event
+  final case class Withdrawn(amount: BigDecimal) extends Event
+  final case object Closed extends Event
 }
 
-enum Rejection {
-  case ExistingAccount
-  case NoSuchAccount
-  case InsufficientBalance
-  case NotSettled
-  case AlreadyClosed
-  case BadRequest
+sealed trait Rejection
+object Rejection {
+  final case object ExistingAccount extends Rejection
+  final case object NoSuchAccount extends Rejection
+  final case object InsufficientBalance extends Rejection
+  final case object NotSettled extends Rejection
+  final case object AlreadyClosed extends Rejection
+  final case object BadRequest extends Rejection
 }
 
-enum Account {
-  case New
-  case Open(balance: BigDecimal)
-  case Close
-
-  def open: Decision[Rejection, Event, Open] = this
-    .decide {
-      case New => Decision.accept(Event.Opened)
+sealed trait Account {
+  def open: Decision[Rejection, Event, Account.Open] = this.decide {
+      case Account.New => Decision.accept(Event.Opened)
       case _   => Decision.reject(Rejection.ExistingAccount)
     }
     .validate(_.mustBeOpen)
 
   def close: Decision[Rejection, Event, Account] =
     this.perform(mustBeOpen.toDecision.flatMap { account =>
-      if account.balance == 0 then Event.Closed.accept
+      if (account.balance == 0) Event.Closed.accept
       else Decision.reject(Rejection.NotSettled)
     })
 
-  def withdraw(amount: BigDecimal): Decision[Rejection, Event, Open] = this
+  def withdraw(amount: BigDecimal): Decision[Rejection, Event, Account.Open] = this
     .perform(mustBeOpen.toDecision.flatMap { account =>
-      if account.balance >= amount && amount > 0
-      then Decision.accept(Event.Withdrawn(amount))
+      if (account.balance >= amount && amount > 0) Decision.accept(Event.Withdrawn(amount))
       else Decision.reject(Rejection.InsufficientBalance)
     // We can model rejections to have values, which helps a lot for showing error messages, but it's out of scope for this document
     })
     .validate(_.mustBeOpen)
 
-  def deposit(amount: BigDecimal): Decision[Rejection, Event, Open] = this
+  def deposit(amount: BigDecimal): Decision[Rejection, Event, Account.Open] = this
     .perform(mustBeOpen.toDecision.flatMap { account =>
-      if amount > 0 then Decision.accept(Event.Deposited(amount))
+      if (amount > 0) Decision.accept(Event.Deposited(amount))
       else Decision.reject(Rejection.BadRequest)
     })
     .validate(_.mustBeOpen)
 
-  private def mustBeOpen: ValidatedNec[Rejection, Open] = this match {
-    case o @ Open(_) => o.validNec
-    case New         => Rejection.NoSuchAccount.invalidNec
-    case Close       => Rejection.AlreadyClosed.invalidNec
+  private def mustBeOpen: ValidatedNec[Rejection, Account.Open] = this match {
+    case o @ Account.Open(_) => o.validNec
+    case Account.New         => Rejection.NoSuchAccount.invalidNec
+    case Account.Close       => Rejection.AlreadyClosed.invalidNec
   }
 }
 
 object Account extends DomainModel[Account, Event, Rejection] {
+  final case object New extends Account
+  final case class Open(balance: BigDecimal) extends Account
+  final case object Close extends Account
+
   def initial = New
   def transition = {
     case Event.Opened => _ => Open(0).validNec

@@ -10,41 +10,29 @@ ThisBuild / developers := List(
   tlGitHubDev("hnaderi", "Hossein Naderi")
 )
 
-ThisBuild / scalaVersion := "3.2.2"
+ThisBuild / scalaVersion := "2.13.10"
 
-lazy val root = tlCrossRootProject.aggregate(domain, catsEffect, zio)
+lazy val root = tlCrossRootProject.aggregate(domain, catsEffect)
 
-lazy val domain = crossProject(JVMPlatform, JSPlatform, NativePlatform)
+lazy val domain = crossProject(JVMPlatform)
   .crossType(CrossType.Pure)
   .in(file("core"))
   .enablePlugins(NoPublishPlugin)
   .settings(
     name := "edomata-domain-example",
     libraryDependencies ++= Seq(
-      "dev.hnaderi" %%% "edomata-skunk-circe" % "0.10.1",
-      "dev.hnaderi" %%% "edomata-munit" % "0.10.1" % Test,
-      "io.circe" %%% "circe-generic" % "0.14.5"
+      ("dev.hnaderi" %%% "edomata-skunk-circe" % "0.10.1").cross(CrossVersion.for2_13Use3),
+      ("dev.hnaderi" %%% "edomata-munit" % "0.10.1").cross(CrossVersion.for2_13Use3) % Test,
+      ("io.circe" %%% "circe-generic" % "0.14.5").cross(CrossVersion.for2_13Use3)
     )
   )
 
-lazy val catsEffect = crossProject(JVMPlatform, JSPlatform)
+lazy val catsEffect = crossProject(JVMPlatform)
   .crossType(CrossType.Pure)
   .dependsOn(domain)
   .enablePlugins(NoPublishPlugin)
   .settings(
     name := "edomata-ce-example"
   )
-  .jsSettings(
-    scalaJSUseMainModuleInitializer := true,
-    scalaJSLinkerConfig ~= (_.withModuleKind(ModuleKind.CommonJSModule))
-  )
 
-lazy val zio = project
-  .dependsOn(domain.jvm)
-  .settings(
-    name := "edomata-zio-example",
-    libraryDependencies ++= Seq(
-      "dev.zio" %% "zio-interop-cats" % "23.0.03"
-    )
-  )
-  .enablePlugins(NoPublishPlugin)
+ThisBuild / scalacOptions +="-Ytasty-reader"
